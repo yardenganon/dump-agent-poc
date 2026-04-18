@@ -60,8 +60,9 @@ jobs:
             "managed_dump=$(Split-Path $r.managedDumpPath -Leaf)" | Out-File $env:GITHUB_OUTPUT -Append
           }
 
+          # previewHtml is markdown — GitHub renders it natively in the job summary.
           if ($r.previewHtml) {
-            $r.previewHtml | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8
+            $r.previewHtml | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
           }
 
           if (-not $r.success) {

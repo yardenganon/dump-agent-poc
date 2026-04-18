@@ -63,7 +63,9 @@ public class DumpExecutor(IOptions<AgentOptions> opts, ILogger<DumpExecutor> log
                 var managedPath = Path.Combine(options.DumpsDir, $"{req.RequestId}_{ts}_managed.dmp");
                 logger.LogInformation("Managed dump: PID {Pid} → {Path}", pid, managedPath);
 
-                var (mExit, mErr) = await RunAsync(dotnetDump, $"collect -p {pid} -o \"{managedPath}\"");
+                // --type Heap = managed heap + runtime structures only (~50-100 MB vs ~200 MB for Full).
+                // Use for dotnet-dump analyze; use Full dump for WinDbg.
+                var (mExit, mErr) = await RunAsync(dotnetDump, $"collect -p {pid} -o \"{managedPath}\" --type Heap");
 
                 if (mExit == 0 && File.Exists(managedPath))
                 {
@@ -97,7 +99,7 @@ public class DumpExecutor(IOptions<AgentOptions> opts, ILogger<DumpExecutor> log
             CompletedAt:          completed,
             PreviewHtml:          null);
 
-        return result with { PreviewHtml = EmailTemplate.Render(result) };
+        return result with { PreviewHtml = EmailTemplate.RenderMarkdown(result) };
     }
 
     private static string? FindOnPath(string exe)
