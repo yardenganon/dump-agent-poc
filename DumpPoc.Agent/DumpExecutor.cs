@@ -39,7 +39,8 @@ public class DumpExecutor(IOptions<AgentOptions> opts, ILogger<DumpExecutor> log
         var createdFull = Directory.GetFiles(options.DumpsDir, "*.dmp")
             .FirstOrDefault(f => !beforeFull.Contains(f));
 
-        if (fullExit == 0 && createdFull is not null)
+        // procdump exits non-zero even on success — use file creation as the real indicator.
+        if (createdFull is not null)
         {
             fullDumpPath      = createdFull;
             fullDumpSizeBytes = new FileInfo(createdFull).Length;
