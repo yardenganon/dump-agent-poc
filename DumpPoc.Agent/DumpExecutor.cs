@@ -67,15 +67,15 @@ public class DumpExecutor(IOptions<AgentOptions> opts, ILogger<DumpExecutor> log
                 // Use for dotnet-dump analyze; use Full dump for WinDbg.
                 var (mExit, mErr) = await RunAsync(dotnetDump, $"collect -p {pid} -o \"{managedPath}\" --type Heap");
 
-                if (mExit == 0 && File.Exists(managedPath))
+                if (File.Exists(managedPath))
                 {
                     managedDumpPath      = managedPath;
                     managedDumpSizeBytes = new FileInfo(managedPath).Length;
-                    logger.LogInformation("Managed dump done: {Size} bytes", managedDumpSizeBytes);
+                    logger.LogInformation("Managed dump done: {Path} ({Size} bytes)", managedPath, managedDumpSizeBytes);
                 }
                 else
                 {
-                    logger.LogWarning("dotnet-dump failed (exit {Code}): {Err}", mExit, mErr);
+                    logger.LogWarning("dotnet-dump failed (exit {Code}): {Out}", mExit, mErr);
                 }
             }
             else
@@ -104,7 +104,15 @@ public class DumpExecutor(IOptions<AgentOptions> opts, ILogger<DumpExecutor> log
 
     private static string? FindOnPath(string exe)
     {
-        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
+        // Standard PATH entries
+        var dirs = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator).ToList();
+
+        // .NET global tools live here and are often missing from the Aspire-spawned process PATH
+        var dotnetTools = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dotnet", "tools");
+        dirs.Add(dotnetTools);
+
+        foreach (var dir in dirs)
         {
             foreach (var candidate in new[] { Path.Combine(dir, exe + ".exe"), Path.Combine(dir, exe) })
                 if (File.Exists(candidate)) return candidate;
