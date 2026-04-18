@@ -4,17 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       process_name:
-        description: "Process to dump (e.g. notepad)"
+        description: "Process to dump (e.g. DumpPoc.Target)"
         required: true
+        default: "DumpPoc.Target"
       runtime:
         description: "Runtime"
         required: true
-        default: native
+        default: dotnet-modern
         type: choice
         options:
-          - native
           - dotnet-modern
           - dotnet-framework
+          - native
       requester_email:
         description: "Requester email"
         required: true
@@ -25,8 +26,6 @@ on:
 jobs:
   dump:
     name: Take dump (${{ inputs.process_name }})
-    # Runs on the Aspire-managed runner container on the local Windows 11 machine.
-    # The container label "aspire-poc-runner" is set by the AppHost at startup.
     runs-on: [self-hosted, aspire-poc-runner]
     environment: dump-production  # required-reviewer approval gate
 
@@ -45,8 +44,6 @@ jobs:
             requesterName  = "${{ inputs.requester_name }}"
           } | ConvertTo-Json -Compress
 
-          # The runner is a Linux container; the agent runs on the Windows host.
-          # host.docker.internal resolves to the host machine from within a Docker container.
           $r = Invoke-RestMethod `
             -Uri "http://host.docker.internal:5100/dump" `
             -Method POST `
@@ -54,10 +51,15 @@ jobs:
             -Headers @{ "X-Dump-Secret" = "${{ secrets.DUMP_AGENT_SECRET }}" } `
             -Body $body
 
-          "success=$($r.success)"                          | Out-File $env:GITHUB_OUTPUT -Append
-          "file_name=$(Split-Path $r.dumpPath -Leaf)"     | Out-File $env:GITHUB_OUTPUT -Append
+          "success=$($r.success)"  | Out-File $env:GITHUB_OUTPUT -Append
 
-          # Write the HTML email preview to the job summary
+          if ($r.fullDumpPath) {
+            "full_dump=$(Split-Path $r.fullDumpPath -Leaf)"    | Out-File $env:GITHUB_OUTPUT -Append
+          }
+          if ($r.managedDumpPath) {
+            "managed_dump=$(Split-Path $r.managedDumpPath -Leaf)" | Out-File $env:GITHUB_OUTPUT -Append
+          }
+
           if ($r.previewHtml) {
             $r.previewHtml | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8
           }
@@ -67,11 +69,18 @@ jobs:
             exit 1
           }
 
-      - name: Upload dump as artifact
-        if: steps.result.outputs.success == 'True'
+      - name: Upload full dump (procdump)
+        if: steps.result.outputs.full_dump != ''
         uses: actions/upload-artifact@v4
         with:
-          # The dump dir is bind-mounted into the runner container at /dumps
-          name: dump-${{ github.run_id }}
-          path: /dumps/${{ steps.result.outputs.file_name }}
+          name: full-dump-${{ github.run_id }}
+          path: /dumps/${{ steps.result.outputs.full_dump }}
+          retention-days: 14
+
+      - name: Upload managed dump (dotnet-dump)
+        if: steps.result.outputs.managed_dump != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: managed-dump-${{ github.run_id }}
+          path: /dumps/${{ steps.result.outputs.managed_dump }}
           retention-days: 14

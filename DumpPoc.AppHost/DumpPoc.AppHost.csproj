@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\DumpPoc.Agent\DumpPoc.Agent.csproj" />
     <ProjectReference Include="..\DumpPoc.ServiceDefaults\DumpPoc.ServiceDefaults.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\DumpPoc.Target\DumpPoc.Target.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

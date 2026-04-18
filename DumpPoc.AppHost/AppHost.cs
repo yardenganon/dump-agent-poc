@@ -1,6 +1,7 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddProject<Projects.DumpPoc_Agent>("dump-agent");
+builder.AddProject<Projects.DumpPoc_Target>("dump-target");
 
 // GitHub Actions self-hosted runner — auto-registers with the repo on start.
 // Requires GitHub:Pat, GitHub:RepoUrl, and GitHub:Host in appsettings.Development.json (gitignored).
