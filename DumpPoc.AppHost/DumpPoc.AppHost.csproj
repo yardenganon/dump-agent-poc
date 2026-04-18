@@ -1,0 +1,16 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.1.0">
+
+  <ItemGroup>
+    <ProjectReference Include="..\DumpPoc.Agent\DumpPoc.Agent.csproj" />
+    <ProjectReference Include="..\DumpPoc.ServiceDefaults\DumpPoc.ServiceDefaults.csproj" IsAspireProjectResource="false" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>59e5c514-cb76-4d0b-b0b4-6bc032f64503</UserSecretsId>
+  </PropertyGroup>
+
+</Project>

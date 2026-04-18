@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="DumpPoc.Agent/DumpPoc.Agent.csproj" />
+  <Project Path="DumpPoc.AppHost/DumpPoc.AppHost.csproj" />
+  <Project Path="DumpPoc.ServiceDefaults/DumpPoc.ServiceDefaults.csproj" />
+  <Project Path="DumpPoc.Shared/DumpPoc.Shared.csproj" />
+</Solution>

@@ -1,0 +1,14 @@
+## Build artifacts
+bin/
+obj/
+
+## Rider / VS
+.idea/
+.vs/
+*.user
+
+## Sensitive local config — contains GitHub PAT
+DumpPoc.AppHost/appsettings.Development.json
+
+## Dumps
+C:\Dumps\

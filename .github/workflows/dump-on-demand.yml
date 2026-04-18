@@ -1,0 +1,77 @@
+name: Dump on Demand
+
+on:
+  workflow_dispatch:
+    inputs:
+      process_name:
+        description: "Process to dump (e.g. notepad)"
+        required: true
+      runtime:
+        description: "Runtime"
+        required: true
+        default: native
+        type: choice
+        options:
+          - native
+          - dotnet-modern
+          - dotnet-framework
+      requester_email:
+        description: "Requester email"
+        required: true
+      requester_name:
+        description: "Requester name"
+        required: true
+
+jobs:
+  dump:
+    name: Take dump (${{ inputs.process_name }})
+    # Runs on the Aspire-managed runner container on the local Windows 11 machine.
+    # The container label "aspire-poc-runner" is set by the AppHost at startup.
+    runs-on: [self-hosted, aspire-poc-runner]
+    environment: dump-production  # required-reviewer approval gate
+
+    steps:
+      - name: Request dump from agent
+        id: result
+        shell: pwsh
+        run: |
+          $requestId = "${{ github.run_id }}-${{ github.run_attempt }}"
+
+          $body = @{
+            requestId      = $requestId
+            processName    = "${{ inputs.process_name }}"
+            runtime        = "${{ inputs.runtime }}"
+            requesterEmail = "${{ inputs.requester_email }}"
+            requesterName  = "${{ inputs.requester_name }}"
+          } | ConvertTo-Json -Compress
+
+          # The runner is a Linux container; the agent runs on the Windows host.
+          # host.docker.internal resolves to the host machine from within a Docker container.
+          $r = Invoke-RestMethod `
+            -Uri "http://host.docker.internal:5100/dump" `
+            -Method POST `
+            -ContentType "application/json; charset=utf-8" `
+            -Headers @{ "X-Dump-Secret" = "${{ secrets.DUMP_AGENT_SECRET }}" } `
+            -Body $body
+
+          "success=$($r.success)"                          | Out-File $env:GITHUB_OUTPUT -Append
+          "file_name=$(Split-Path $r.dumpPath -Leaf)"     | Out-File $env:GITHUB_OUTPUT -Append
+
+          # Write the HTML email preview to the job summary
+          if ($r.previewHtml) {
+            $r.previewHtml | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8
+          }
+
+          if (-not $r.success) {
+            Write-Error "Dump failed: $($r.error)"
+            exit 1
+          }
+
+      - name: Upload dump as artifact
+        if: steps.result.outputs.success == 'True'
+        uses: actions/upload-artifact@v4
+        with:
+          # The dump dir is bind-mounted into the runner container at /dumps
+          name: dump-${{ github.run_id }}
+          path: /dumps/${{ steps.result.outputs.file_name }}
+          retention-days: 14
