@@ -25,24 +25,29 @@ public class DumpExecutor(IOptions<AgentOptions> opts, ILogger<DumpExecutor> log
         var ts = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
 
         // ── Full dump via procdump -ma ────────────────────────────────────────
-        var fullPath = Path.Combine(options.DumpsDir, $"{req.RequestId}_{ts}_full.dmp");
-        logger.LogInformation("Full dump: PID {Pid} → {Path}", pid, fullPath);
+        // Pass the dump directory; procdump names the file itself.
+        // We snapshot the dir before/after to identify the created file reliably.
+        logger.LogInformation("Full dump: PID {Pid} → {Dir}", pid, options.DumpsDir);
 
-        var (fullExit, fullErr) = await RunAsync(
-            options.ProcDumpPath, $"-ma {pid} \"{fullPath}\" -accepteula");
+        var beforeFull = Directory.GetFiles(options.DumpsDir, "*.dmp").ToHashSet();
+        var (fullExit, fullOut) = await RunAsync(
+            options.ProcDumpPath, $"-ma {pid} \"{options.DumpsDir}\" -accepteula");
 
         string? fullDumpPath      = null;
         long?   fullDumpSizeBytes = null;
 
-        if (fullExit == 0 && File.Exists(fullPath))
+        var createdFull = Directory.GetFiles(options.DumpsDir, "*.dmp")
+            .FirstOrDefault(f => !beforeFull.Contains(f));
+
+        if (fullExit == 0 && createdFull is not null)
         {
-            fullDumpPath      = fullPath;
-            fullDumpSizeBytes = new FileInfo(fullPath).Length;
-            logger.LogInformation("Full dump done: {Size} bytes", fullDumpSizeBytes);
+            fullDumpPath      = createdFull;
+            fullDumpSizeBytes = new FileInfo(createdFull).Length;
+            logger.LogInformation("Full dump done: {Path} ({Size} bytes)", fullDumpPath, fullDumpSizeBytes);
         }
         else
         {
-            logger.LogWarning("procdump failed (exit {Code}): {Err}", fullExit, fullErr);
+            logger.LogWarning("procdump failed (exit {Code}): {Out}", fullExit, fullOut);
         }
 
         // ── Managed dump via dotnet-dump (dotnet-modern only) ─────────────────
@@ -78,7 +83,7 @@ public class DumpExecutor(IOptions<AgentOptions> opts, ILogger<DumpExecutor> log
 
         // ── Build result ──────────────────────────────────────────────────────
         var bothFailed = fullDumpPath is null && managedDumpPath is null;
-        string? error  = bothFailed ? $"Both dump tools failed. procdump: {fullErr}".Trim() : null;
+        string? error  = bothFailed ? $"Both dump tools failed. procdump output: {fullOut}".Trim() : null;
 
         var result = new DumpResult(
             req.RequestId, req.ProcessName,
@@ -104,7 +109,8 @@ public class DumpExecutor(IOptions<AgentOptions> opts, ILogger<DumpExecutor> log
         return null;
     }
 
-    private static async Task<(int exitCode, string stderr)> RunAsync(string fileName, string arguments)
+    // Returns (exitCode, combined stdout+stderr) — procdump writes to stdout, dotnet-dump to stderr.
+    private static async Task<(int exitCode, string output)> RunAsync(string fileName, string arguments)
     {
         using var proc = new Process();
         proc.StartInfo = new ProcessStartInfo
@@ -118,8 +124,8 @@ public class DumpExecutor(IOptions<AgentOptions> opts, ILogger<DumpExecutor> log
         };
 
         proc.Start();
-        var stderrTask = proc.StandardError.ReadToEndAsync();
         var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = proc.StandardError.ReadToEndAsync();
 
         var finished = await Task.Run(() => proc.WaitForExit(TimeoutMs));
         if (!finished)
@@ -128,8 +134,9 @@ public class DumpExecutor(IOptions<AgentOptions> opts, ILogger<DumpExecutor> log
             return (-1, "Timed out after 5 minutes.");
         }
 
-        await Task.WhenAll(stderrTask, stdoutTask);
-        return (proc.ExitCode, await stderrTask);
+        await Task.WhenAll(stdoutTask, stderrTask);
+        var combined = (await stdoutTask + "\n" + await stderrTask).Trim();
+        return (proc.ExitCode, combined);
     }
 
     private static DumpResult Fail(DumpRequest req, string error, string completedAt) =>
