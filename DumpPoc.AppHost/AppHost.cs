@@ -1,7 +1,6 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-var agent = builder.AddProject<Projects.DumpPoc_Agent>("dump-agent")
-    .WithHttpEndpoint(port: 5100, name: "http");
+builder.AddProject<Projects.DumpPoc_Agent>("dump-agent");
 
 // GitHub Actions self-hosted runner — auto-registers with the repo on start.
 // Requires GitHub:Pat, GitHub:RepoUrl, and GitHub:Host in appsettings.Development.json (gitignored).
